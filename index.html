@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Three choices. One uncannily specific sense of humor. Make your AI less painfully boring." />
+    <meta name="theme-color" content="#f4efdf" />
+    <title>Be Funny — diagnose your sense of humor</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="noise" aria-hidden="true"></div>
+    <header class="site-header">
+      <a class="brand" href="./" aria-label="Be Funny home"><span class="brand-mark">B<span>F</span></span><span>BE FUNNY</span></a>
+      <span class="issue">ISSUE № 001 &nbsp;•&nbsp; HUMOR, DIAGNOSED</span>
+      <button class="header-link" id="about-button" type="button">WHAT IS THIS?</button>
+    </header>
+
+    <main id="app" tabindex="-1"></main>
+
+    <dialog id="about-dialog">
+      <button class="dialog-close" type="button" aria-label="Close">×</button>
+      <p class="eyebrow">THE SCIENCE* OF SILLY</p>
+      <h2>We make your AI less boring.</h2>
+      <p>Choose the joke you prefer in three head-to-head rounds. Our tiny taste engine combines your choices with crowd priors to build a useful humor prompt.</p>
+      <p class="fine-print">*The word “science” is doing ambitious work here. Your answers stay in your browser.</p>
+    </dialog>
+
+    <footer><span>BUILT FOR HUMANS WITH OPINIONS</span><span>NO COOKIES. JUST CRUMBS OF COMEDY.</span></footer>
+    <script type="module" src="app.js"></script>
+  </body>
+</html>
