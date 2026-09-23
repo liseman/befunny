@@ -2,6 +2,7 @@ import { jokes, dimensions, selectPair, selectResultJoke, applyChoice, topTraits
 
 const app=document.querySelector("#app");
 const storedRatings=JSON.parse(localStorage.getItem("beFunnyRatings") || "{}");
+const jokeApi="https://be-funny-jokes.lukeiseman.workers.dev";
 let state={screen:"home",round:0,profile:{},seen:[],pair:[]};
 
 function render(){
@@ -53,12 +54,29 @@ function renderResult(){
   const best=selectResultJoke(state.profile,state.seen,previousJoke,storedRatings);
   localStorage.setItem("beFunnyLastResultJoke",best.id);
   const canRefine=unseen.length>=6;
-  app.innerHTML=`<section class="result"><div class="result-grid"><div class="result-main"><p class="eyebrow">Your comedy diagnosis</p><h1>${dimensions[traits[0]].label}<br>with a twist.</h1><p class="description">${resultCopy(traits)}</p><div class="trait-list">${traits.map(t=>`<span class="trait">${dimensions[t].label.toUpperCase()}</span>`).join("")}</div><p class="side-title">PASTE THIS INTO YOUR AI</p><div class="prompt-box"><pre id="prompt">${prompt}</pre><button class="button small copy" id="copy">Copy prompt</button></div></div><aside class="result-side"><p class="side-title">A JOKE YOU SHOULD LIKE</p><p class="personal-joke">“${best.text}”</p><p class="side-title">DID WE NAIL IT?</p><div class="stars" role="group" aria-label="Rate this result">${[1,2,3,4,5].map(n=>`<button class="star" data-rating="${n}" aria-label="${n} star${n>1?'s':''}">★</button>`).join("")}</div><p class="rating-status" aria-live="polite"></p><div class="actions">${canRefine?'<button class="button small" id="refine">Refine further</button>':''}<button class="button small secondary" id="share">Share result</button><button class="button small secondary" id="restart">Start over</button></div><p class="share-status" aria-live="polite"></p></aside></div></section>`;
+  app.innerHTML=`<section class="result"><div class="result-grid"><div class="result-main"><p class="eyebrow">Your comedy diagnosis</p><h1>${dimensions[traits[0]].label}<br>with a twist.</h1><p class="description">${resultCopy(traits)}</p><div class="trait-list">${traits.map(t=>`<span class="trait">${dimensions[t].label.toUpperCase()}</span>`).join("")}</div><p class="side-title">PASTE THIS INTO YOUR AI</p><div class="prompt-box"><pre id="prompt">${prompt}</pre><button class="button small copy" id="copy">Copy prompt</button></div></div><aside class="result-side"><p class="side-title" id="joke-label">GENERATING A FRESH JOKE…</p><p class="personal-joke" aria-live="polite">“${best.text}”</p><p class="side-title">DID WE NAIL IT?</p><div class="stars" role="group" aria-label="Rate this result">${[1,2,3,4,5].map(n=>`<button class="star" data-rating="${n}" aria-label="${n} star${n>1?'s':''}">★</button>`).join("")}</div><p class="rating-status" aria-live="polite"></p><div class="actions">${canRefine?'<button class="button small" id="refine">Refine further</button>':''}<button class="button small secondary" id="share">Share result</button><button class="button small secondary" id="restart">Start over</button></div><p class="share-status" aria-live="polite"></p></aside></div></section>`;
   document.querySelector("#copy").onclick=async()=>{ await copyText(prompt); document.querySelector("#copy").textContent="Copied!"; };
   document.querySelector("#share").onclick=share;
   document.querySelector("#restart").onclick=()=>start(false);
   if(canRefine) document.querySelector("#refine").onclick=()=>start(true);
-  document.querySelectorAll(".star").forEach(s=>s.onclick=()=>rate(Number(s.dataset.rating),best.id));
+  let displayedJokeId=best.id;
+  document.querySelectorAll(".star").forEach(s=>s.onclick=()=>rate(Number(s.dataset.rating),displayedJokeId));
+  loadFreshJoke(traits).then(joke=>{
+    document.querySelector(".personal-joke").textContent=`“${joke}”`;
+    document.querySelector("#joke-label").textContent="A FRESH JOKE, MADE FOR YOU";
+    displayedJokeId=`generated:${joke.slice(0,80)}`;
+  }).catch(()=>{ document.querySelector("#joke-label").textContent="A JOKE YOU SHOULD LIKE"; });
+}
+
+async function loadFreshJoke(traits){
+  let history=[];
+  try { history=JSON.parse(localStorage.getItem("beFunnyGeneratedJokes") || "[]"); } catch {}
+  const response=await fetch(jokeApi,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({traits:traits.map(t=>dimensions[t].description),history:history.slice(-12)}),signal:AbortSignal.timeout(15000)});
+  if(!response.ok) throw new Error("Joke generation failed");
+  const {joke}=await response.json();
+  if(!joke || history.includes(joke)) throw new Error("Joke was not fresh");
+  history.push(joke); localStorage.setItem("beFunnyGeneratedJokes",JSON.stringify(history.slice(-12)));
+  return joke;
 }
 
 async function copyText(text){ try { await navigator.clipboard.writeText(text); } catch { const t=document.createElement("textarea");t.value=text;document.body.append(t);t.select();document.execCommand("copy");t.remove(); } }
