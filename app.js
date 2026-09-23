@@ -56,11 +56,12 @@ async function loadFreshPair(seeds){
   let history=[];
   try { history=JSON.parse(localStorage.getItem("beFunnyGeneratedPairJokes") || "[]"); } catch {}
   const targets=seeds.map(seed=>{ const tag=Object.entries(seed.tags).sort((a,b)=>b[1]-a[1])[0][0]; return dimensions[tag].description; });
-  const response=await fetch(jokeApi,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({mode:"pair",targets,history:history.slice(-20)}),signal:AbortSignal.timeout(30000)});
+  const preferences=Object.keys(state.profile).length?topTraits(state.profile).map(tag=>dimensions[tag].description):[];
+  const response=await fetch(jokeApi,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({mode:"pair",targets,preferences,history:history.slice(-40),round:state.round+1}),signal:AbortSignal.timeout(30000)});
   if(!response.ok) throw new Error("Pair generation failed");
   const {jokes:generated}=await response.json();
   if(!Array.isArray(generated)||generated.length!==2||generated.some(joke=>!joke||history.includes(joke))) throw new Error("Pair was not fresh");
-  localStorage.setItem("beFunnyGeneratedPairJokes",JSON.stringify([...history,...generated].slice(-20)));
+  localStorage.setItem("beFunnyGeneratedPairJokes",JSON.stringify([...history,...generated].slice(-40)));
   return generated.map((text,index)=>({...seeds[index],id:`ai-${Date.now()}-${index}`,text}));
 }
 

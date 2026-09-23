@@ -27,19 +27,21 @@ function normalized(value) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g," ").trim();
 }
 
-export function buildPrompt(traits,history,purpose="result") {
+export function buildPrompt(traits,history,purpose="result",context={}) {
   const avoid=history.length?`\nNever repeat or closely paraphrase these earlier jokes:\n- ${history.join("\n- ")}`:"";
-  const direction=purpose==="choice"?`Write one brand-new joke that strongly showcases ${traits.join(", ")}.`:`Write one brand-new joke for a reader who likes ${traits.join(", ")}.`;
+  const preferences=context.preferences?.length?` The reader's choices so far suggest they enjoy ${context.preferences.join(", ")}; adapt to that taste without losing the target style.`:"";
+  const round=context.round?` This is quiz round ${context.round}.`:"";
+  const direction=purpose==="choice"?`Write one brand-new joke that strongly showcases ${traits.join(", ")}.${preferences}${round}`:`Write one brand-new joke for a reader who likes ${traits.join(", ")}.`;
   return `${direction} Make it concise (one or two sentences), specific, and self-contained. Use an unexpected turn and do not explain the punchline. Avoid generic dad jokes, recycled internet jokes, cruelty, quotation marks, labels, or preamble.${avoid}\nReturn only the joke.`;
 }
 
-async function generateJoke(env,traits,history,purpose) {
+async function generateJoke(env,traits,history,purpose,context) {
   const previous=new Set(history.map(normalized));
   for(let attempt=0;attempt<3;attempt++) {
     const result=await env.AI.run(model,{
       messages:[
         {role:"system",content:"You are an expert comedy writer. Create original, safe material and return only the requested joke."},
-        {role:"user",content:buildPrompt(traits,history,purpose)}
+        {role:"user",content:buildPrompt(traits,history,purpose,context)}
       ],
       max_tokens:120,
       temperature:0.95
@@ -59,12 +61,15 @@ export async function handleRequest(request,env) {
   try {
     const input=await request.json();
     const traits=Array.isArray(input.traits)?input.traits.slice(0,3).map(String):[];
-    const history=Array.isArray(input.history)?input.history.slice(-20).map(value=>String(value).slice(0,300)):[];
+    const history=Array.isArray(input.history)?input.history.slice(-40).map(value=>String(value).slice(0,300)):[];
     if(input.mode==="pair") {
       const targets=Array.isArray(input.targets)?input.targets.slice(0,2).map(value=>String(value).slice(0,100)):[];
+      const preferences=Array.isArray(input.preferences)?input.preferences.slice(0,3).map(value=>String(value).slice(0,100)):[];
+      const round=Math.max(1,Math.min(3,Number(input.round)||1));
       if(targets.length!==2) return json({error:"Two humor targets are required"},400,origin);
-      const first=await generateJoke(env,[targets[0]],history,"choice");
-      const second=first&&await generateJoke(env,[targets[1]],[...history,first],"choice");
+      const context={preferences,round};
+      const first=await generateJoke(env,[targets[0]],history,"choice",context);
+      const second=first&&await generateJoke(env,[targets[1]],[...history,first],"choice",context);
       if(first&&second) return json({jokes:[first,second]},200,origin);
       return json({error:"Could not produce a fresh joke pair"},503,origin);
     }
