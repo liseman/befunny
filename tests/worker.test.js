@@ -9,6 +9,19 @@ test("AI prompt includes the humor profile and previous jokes",()=>{
   assert.match(prompt,/An old joke\./);
   assert.match(prompt,/brainstorm at least five premises/);
   assert.match(prompt,/no sentient office objects/i);
+  assert.match(prompt,/exactly three candidates/);
+});
+
+test("worker uses a comedy editor to choose the strongest candidate",async()=>{
+  const replies=[
+    "The first complete joke is ordinary.|||The second complete joke has a sharper turn.|||The third complete joke is merely quirky.",
+    "2"
+  ];
+  const env={AI:{run:async()=>({response:replies.shift()})}};
+  const request=new Request("https://worker.example",{method:"POST",headers:{Origin:"https://liseman.github.io","Content-Type":"application/json"},body:JSON.stringify({traits:["dry"],history:[]})});
+  const response=await handleRequest(request,env);
+  assert.equal(response.status,200);
+  assert.deepEqual(await response.json(),{joke:"The second complete joke has a sharper turn."});
 });
 
 test("worker generates a fresh adaptive quiz pair",async()=>{

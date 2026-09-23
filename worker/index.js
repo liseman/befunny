@@ -31,13 +31,27 @@ export function buildPrompt(traits,history,purpose="result",context={}) {
   const avoid=history.length?`\nNever repeat or closely paraphrase these earlier jokes:\n- ${history.join("\n- ")}`:"";
   const preferences=context.preferences?.length?` The reader has preferred ${context.preferences.join(", ")} so far; tune the joke to that taste without diluting the target style.`:"";
   const assignment=purpose==="choice"?`The primary style must be ${traits.join(", ")}.${preferences}`:`The reader likes ${traits.join(", ")}.`;
-  return `Write one genuinely funny, original joke. ${assignment}
+  return `Write genuinely funny, original jokes. ${assignment}
 
-Silently brainstorm at least five premises, reject the obvious ones, and output only the strongest finished joke. Build from a recognizable human truth or sharply observed detail, then make a surprising but logical turn. Prefer specificity, compression, and a confident ending.
+Silently brainstorm at least five premises and develop the strongest three into complete jokes. Each needs an actual comic turn, not merely a quirky statement or observation. Build from a recognizable human truth or sharply observed detail, then make a surprising but logical turn. Prefer specificity, compression, and a confident ending.
 
 Do not use stock AI-comedy devices: no sentient office objects, animals filing paperwork, "my therapist says," existential appliances, meetings that "could have been an email," dating-app clichés, or "plot twist." No generic dad jokes, recycled internet jokes, cruelty, explanation, labels, quotation marks, or preamble. One or two sentences; under 55 words.${avoid}
 
-Return only the joke.`;
+Return exactly three candidates separated by |||, with no numbering or commentary.`;
+}
+
+function candidatesFrom(value) {
+  return String(value || "").split("|||").map(cleanJoke).filter(joke=>joke.length>=20&&joke.length<=400);
+}
+
+async function pickBest(env,candidates,traits) {
+  if(candidates.length===1) return candidates[0];
+  const result=await env.AI.run(model,{messages:[
+    {role:"system",content:"You are a merciless comedy editor. Select the joke most likely to produce an actual laugh, not the one that is merely clever or whimsical."},
+    {role:"user",content:`Choose the funniest finished joke for ${traits.join(", ")}. Reward a clear premise, surprise, specificity, and a strong final beat. Reject fragments, familiar premises, and AI whimsy. Reply only with its number.\n${candidates.map((joke,index)=>`${index+1}. ${joke}`).join("\n")}`}
+  ],max_tokens:8,temperature:0});
+  const index=Number.parseInt(result.response,10)-1;
+  return candidates[index]||candidates[0];
 }
 
 async function generateJoke(env,traits,history,purpose,context={}) {
@@ -47,7 +61,8 @@ async function generateJoke(env,traits,history,purpose,context={}) {
       {role:"system",content:"You are a ruthless professional comedy writer. Originality and a real punchline matter more than sounding whimsical. Return only finished material."},
       {role:"user",content:buildPrompt(traits,history,purpose,context)}
     ],max_tokens:160,temperature:1});
-    const joke=cleanJoke(result.response);
+    const candidates=candidatesFrom(result.response).filter(joke=>!previous.has(normalized(joke)));
+    const joke=candidates.length?await pickBest(env,candidates,traits):"";
     if(joke.length>=20 && joke.length<=400 && !previous.has(normalized(joke))) return joke;
   }
   return null;
