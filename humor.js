@@ -57,6 +57,14 @@ export function selectPair(profile={}, seen=[], round=0, ratings={}, random=Math
   return [first,second];
 }
 
+export function selectResultJoke(profile={}, seen=[], previousId="", ratings={}, random=Math.random) {
+  const unseen = jokes.filter(j=>!seen.includes(j.id) && j.id!==previousId);
+  const candidates = unseen.length ? unseen : jokes.filter(j=>j.id!==previousId);
+  const ranked = candidates.map(j=>({j,score:scoreJoke(j,profile,ratings)})).sort((a,b)=>b.score-a.score);
+  const shortlist = ranked.slice(0,Math.min(4,ranked.length));
+  return shortlist[Math.min(Math.floor(random()*shortlist.length),shortlist.length-1)].j;
+}
+
 export function applyChoice(profile, winner, loser) {
   const next={...profile};
   Object.entries(winner.tags).forEach(([tag,w]) => next[tag]=(next[tag]||0)+w);
