@@ -28,7 +28,7 @@ function start(refine=false){
 
 function renderQuiz(){
   const pct=((state.round+1)/3)*100;
-  const choices=state.pairLoading?[0,1].map(i=>`<button class="joke-card" disabled><span class="card-letter">OPTION ${i?"B":"A"}</span><span class="joke-text">Writing you something new…</span></button>`).join(""):state.pair.map((j,i)=>`<button class="joke-card" data-id="${j.id}"><span class="card-letter">OPTION ${i?"B":"A"}</span><span class="joke-text">${j.text}</span><span class="pick"><span>THIS ONE</span><span>→</span></span></button>`).join("");
+  const choices=state.pairLoading?[0,1].map(i=>`<button class="joke-card" disabled><span class="card-letter">OPTION ${i?"B":"A"}</span><span class="joke-text">Writing better jokes…</span></button>`).join(""):state.pair.map((j,i)=>`<button class="joke-card" data-id="${j.id}"><span class="card-letter">OPTION ${i?"B":"A"}</span><span class="joke-text">${j.text}</span><span class="pick"><span>THIS ONE</span><span>→</span></span></button>`).join("");
   app.innerHTML=`<section class="quiz"><div class="quiz-top"><div><p class="eyebrow">Trust your gut. It has excellent taste.</p><h2>Which one is funnier?</h2></div><div class="progress-label">ROUND ${state.round+1} OF 3<div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div></div></div><div class="choices">${choices}</div></section>`;
   document.querySelectorAll(".joke-card").forEach(card=>card.onclick=()=>choose(card.dataset.id));
 }
@@ -36,8 +36,9 @@ function renderQuiz(){
 function choose(id){
   const winner=state.pair.find(j=>j.id===id), loser=state.pair.find(j=>j.id!==id);
   state.profile=applyChoice(state.profile,winner,loser); state.seen.push(...state.pair.map(j=>j.id)); state.round++;
-  if(state.round>=3){ state.screen="result"; const encoded=encodeProfile(state.profile); history.replaceState({},"",`${location.pathname}?taste=${encoded}`); render(); }
-  else preparePair();
+  if(state.round>=3){ state.screen="result"; const encoded=encodeProfile(state.profile); history.replaceState({},"",`${location.pathname}?taste=${encoded}`); }
+  else { preparePair(); return; }
+  render();
 }
 
 async function preparePair(){
@@ -46,8 +47,7 @@ async function preparePair(){
   if(seeds.length<2){ state.seedSeen=[]; seeds=selectPair(state.profile,[],state.round,storedRatings); }
   state.seedSeen.push(...seeds.map(j=>j.id)); state.pair=[]; state.pairLoading=true; render();
   let pair;
-  try { pair=await loadFreshPair(seeds); }
-  catch { pair=seeds; }
+  try { pair=await loadFreshPair(seeds); } catch { pair=seeds; }
   if(request!==pairRequest) return;
   state.pair=pair; state.pairLoading=false; render();
 }

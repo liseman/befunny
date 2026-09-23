@@ -7,6 +7,34 @@ test("AI prompt includes the humor profile and previous jokes",()=>{
   assert.match(prompt,/deadpan, observational/);
   assert.match(prompt,/Never repeat/);
   assert.match(prompt,/An old joke\./);
+  assert.match(prompt,/brainstorm at least five premises/);
+  assert.match(prompt,/no sentient office objects/i);
+  assert.match(prompt,/exactly three candidates/);
+});
+
+test("worker uses a comedy editor to choose the strongest candidate",async()=>{
+  const replies=[
+    "The first complete joke is ordinary.|||The second complete joke has a sharper turn.|||The third complete joke is merely quirky.",
+    "2"
+  ];
+  const env={AI:{run:async()=>({response:replies.shift()})}};
+  const request=new Request("https://worker.example",{method:"POST",headers:{Origin:"https://liseman.github.io","Content-Type":"application/json"},body:JSON.stringify({traits:["dry"],history:[]})});
+  const response=await handleRequest(request,env);
+  assert.equal(response.status,200);
+  assert.deepEqual(await response.json(),{joke:"The second complete joke has a sharper turn."});
+});
+
+test("worker generates a fresh adaptive quiz pair",async()=>{
+  const replies=["A specific first punchline with enough characters.","A different second punchline with enough characters."];
+  const prompts=[];
+  const env={AI:{run:async (_model,input)=>{prompts.push(input.messages[1].content);return {response:replies.shift()};}}};
+  const request=new Request("https://worker.example",{method:"POST",headers:{Origin:"https://liseman.github.io","Content-Type":"application/json"},body:JSON.stringify({mode:"pair",targets:["absurdist leaps","dry observations"],preferences:["subtle deadpan"],round:2,history:[]})});
+  const response=await handleRequest(request,env);
+  assert.equal(response.status,200);
+  assert.deepEqual(await response.json(),{jokes:["A specific first punchline with enough characters.","A different second punchline with enough characters."]});
+  assert.match(prompts[0],/absurdist leaps/);
+  assert.match(prompts[0],/subtle deadpan/);
+  assert.match(prompts[1],/dry observations/);
 });
 
 test("worker retries a repeated joke and returns fresh AI material",async()=>{
@@ -17,18 +45,4 @@ test("worker retries a repeated joke and returns fresh AI material",async()=>{
   assert.equal(response.status,200);
   assert.equal(response.headers.get("Access-Control-Allow-Origin"),"https://liseman.github.io");
   assert.deepEqual(await response.json(),{joke:"My inbox reached enlightenment. It has stopped expecting closure."});
-});
-
-test("worker dynamically generates two contrasting jokes using current quiz context",async()=>{
-  const replies=["The moon filed a noise complaint against the wolves.","My meeting had an agenda, which was ambitious of it."];
-  const prompts=[];
-  const env={AI:{run:async (_model,input)=>{ prompts.push(input.messages[1].content); return {response:replies.shift()}; }}};
-  const request=new Request("https://worker.example",{method:"POST",headers:{Origin:"https://liseman.github.io","Content-Type":"application/json"},body:JSON.stringify({mode:"pair",targets:["absurdist leaps","dry observations"],preferences:["subtle deadpan"],round:2,history:[]})});
-  const response=await handleRequest(request,env);
-  assert.equal(response.status,200);
-  assert.deepEqual(await response.json(),{jokes:["The moon filed a noise complaint against the wolves.","My meeting had an agenda, which was ambitious of it."]});
-  assert.match(prompts[0],/absurdist leaps/);
-  assert.match(prompts[1],/dry observations/);
-  assert.match(prompts[0],/subtle deadpan/);
-  assert.match(prompts[0],/round 2/);
 });
