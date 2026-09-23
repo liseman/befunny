@@ -7,6 +7,21 @@ test("AI prompt includes the humor profile and previous jokes",()=>{
   assert.match(prompt,/deadpan, observational/);
   assert.match(prompt,/Never repeat/);
   assert.match(prompt,/An old joke\./);
+  assert.match(prompt,/brainstorm at least five premises/);
+  assert.match(prompt,/no sentient office objects/i);
+});
+
+test("worker generates a fresh adaptive quiz pair",async()=>{
+  const replies=["A specific first punchline with enough characters.","A different second punchline with enough characters."];
+  const prompts=[];
+  const env={AI:{run:async (_model,input)=>{prompts.push(input.messages[1].content);return {response:replies.shift()};}}};
+  const request=new Request("https://worker.example",{method:"POST",headers:{Origin:"https://liseman.github.io","Content-Type":"application/json"},body:JSON.stringify({mode:"pair",targets:["absurdist leaps","dry observations"],preferences:["subtle deadpan"],round:2,history:[]})});
+  const response=await handleRequest(request,env);
+  assert.equal(response.status,200);
+  assert.deepEqual(await response.json(),{jokes:["A specific first punchline with enough characters.","A different second punchline with enough characters."]});
+  assert.match(prompts[0],/absurdist leaps/);
+  assert.match(prompts[0],/subtle deadpan/);
+  assert.match(prompts[1],/dry observations/);
 });
 
 test("worker retries a repeated joke and returns fresh AI material",async()=>{

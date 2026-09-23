@@ -3,7 +3,8 @@ import { jokes, dimensions, selectPair, selectResultJoke, applyChoice, topTraits
 const app=document.querySelector("#app");
 const storedRatings=JSON.parse(localStorage.getItem("beFunnyRatings") || "{}");
 const jokeApi="https://be-funny-jokes.lukeiseman.workers.dev";
-let state={screen:"home",round:0,profile:{},seen:[],pair:[]};
+let state={screen:"home",round:0,profile:{},seen:[],seedSeen:[],pair:[],pairLoading:false};
+let pairRequest=0;
 
 function render(){
   if(state.screen==="home") renderHome();
@@ -20,13 +21,15 @@ function renderHome(){
 function start(refine=false){
   const prior=refine?state.profile:{};
   const seen=refine?[...state.seen]:[];
-  state={screen:"quiz",round:0,profile:prior,seen,pair:selectPair(prior,seen,refine?1:0,storedRatings)};
-  history.replaceState({},"",location.pathname); render();
+  const seedSeen=refine?[...state.seedSeen]:[];
+  state={screen:"quiz",round:0,profile:prior,seen,seedSeen,pair:[],pairLoading:true};
+  history.replaceState({},"",location.pathname); preparePair();
 }
 
 function renderQuiz(){
   const pct=((state.round+1)/3)*100;
-  app.innerHTML=`<section class="quiz"><div class="quiz-top"><div><p class="eyebrow">Trust your gut. It has excellent taste.</p><h2>Which one is funnier?</h2></div><div class="progress-label">ROUND ${state.round+1} OF 3<div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div></div></div><div class="choices">${state.pair.map((j,i)=>`<button class="joke-card" data-id="${j.id}"><span class="card-letter">OPTION ${i?"B":"A"}</span><span class="joke-text">${j.text}</span><span class="pick"><span>THIS ONE</span><span>→</span></span></button>`).join("")}</div></section>`;
+  const choices=state.pairLoading?[0,1].map(i=>`<button class="joke-card" disabled><span class="card-letter">OPTION ${i?"B":"A"}</span><span class="joke-text">Writing better jokes…</span></button>`).join(""):state.pair.map((j,i)=>`<button class="joke-card" data-id="${j.id}"><span class="card-letter">OPTION ${i?"B":"A"}</span><span class="joke-text">${j.text}</span><span class="pick"><span>THIS ONE</span><span>→</span></span></button>`).join("");
+  app.innerHTML=`<section class="quiz"><div class="quiz-top"><div><p class="eyebrow">Trust your gut. It has excellent taste.</p><h2>Which one is funnier?</h2></div><div class="progress-label">ROUND ${state.round+1} OF 3<div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div></div></div><div class="choices">${choices}</div></section>`;
   document.querySelectorAll(".joke-card").forEach(card=>card.onclick=()=>choose(card.dataset.id));
 }
 
@@ -34,8 +37,32 @@ function choose(id){
   const winner=state.pair.find(j=>j.id===id), loser=state.pair.find(j=>j.id!==id);
   state.profile=applyChoice(state.profile,winner,loser); state.seen.push(...state.pair.map(j=>j.id)); state.round++;
   if(state.round>=3){ state.screen="result"; const encoded=encodeProfile(state.profile); history.replaceState({},"",`${location.pathname}?taste=${encoded}`); }
-  else state.pair=selectPair(state.profile,state.seen,state.round,storedRatings);
+  else { preparePair(); return; }
   render();
+}
+
+async function preparePair(){
+  const request=++pairRequest;
+  let seeds=selectPair(state.profile,state.seedSeen,state.round,storedRatings);
+  if(seeds.length<2){ state.seedSeen=[]; seeds=selectPair(state.profile,[],state.round,storedRatings); }
+  state.seedSeen.push(...seeds.map(j=>j.id)); state.pair=[]; state.pairLoading=true; render();
+  let pair;
+  try { pair=await loadFreshPair(seeds); } catch { pair=seeds; }
+  if(request!==pairRequest) return;
+  state.pair=pair; state.pairLoading=false; render();
+}
+
+async function loadFreshPair(seeds){
+  let history=[];
+  try { history=JSON.parse(localStorage.getItem("beFunnyGeneratedPairJokes") || "[]"); } catch {}
+  const targets=seeds.map(seed=>{ const tag=Object.entries(seed.tags).sort((a,b)=>b[1]-a[1])[0][0]; return dimensions[tag].description; });
+  const preferences=Object.keys(state.profile).length?topTraits(state.profile).map(tag=>dimensions[tag].description):[];
+  const response=await fetch(jokeApi,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({mode:"pair",targets,preferences,history:history.slice(-40),round:state.round+1}),signal:AbortSignal.timeout(30000)});
+  if(!response.ok) throw new Error("Pair generation failed");
+  const {jokes:generated}=await response.json();
+  if(!Array.isArray(generated)||generated.length!==2||generated.some(joke=>!joke||history.includes(joke))) throw new Error("Pair was not fresh");
+  localStorage.setItem("beFunnyGeneratedPairJokes",JSON.stringify([...history,...generated].slice(-40)));
+  return generated.map((text,index)=>({...seeds[index],id:`ai-${Date.now()}-${index}`,text}));
 }
 
 function resultCopy(traits){
