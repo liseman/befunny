@@ -10,14 +10,6 @@ Be Funny is a tiny, privacy-friendly humor taste test. Pick the funnier joke in 
 
 The app is a dependency-free static site. Its adaptive ranking combines each answer with seeded crowd preferences and feedback saved in `localStorage`, so it can run entirely on GitHub Pages without collecting personal data.
 
-## Run locally
-
-```bash
-python3 -m http.server 4173
-```
-
-Then visit <http://localhost:4173>.
-
 ## Test
 
 ```bash
