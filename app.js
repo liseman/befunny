@@ -18,7 +18,8 @@ function renderHome(){
 
 function start(refine=false){
   const prior=refine?state.profile:{};
-  state={screen:"quiz",round:0,profile:prior,seen:[],pair:selectPair(prior,[],0,storedRatings)};
+  const seen=refine?[...state.seen]:[];
+  state={screen:"quiz",round:0,profile:prior,seen,pair:selectPair(prior,seen,refine?1:0,storedRatings)};
   history.replaceState({},"",location.pathname); render();
 }
 
@@ -47,12 +48,14 @@ function makePrompt(traits){
 
 function renderResult(){
   const traits=topTraits(state.profile), prompt=makePrompt(traits);
-  const best=[...jokes].filter(j=>jokes.indexOf(j)>1).sort((a,b)=>traits.reduce((n,t)=>n+(a.tags[t]||0),0)-traits.reduce((n,t)=>n+(b.tags[t]||0),0)).pop();
-  app.innerHTML=`<section class="result"><div class="result-grid"><div class="result-main"><p class="eyebrow">Your comedy diagnosis</p><h1>${dimensions[traits[0]].label}<br>with a twist.</h1><p class="description">${resultCopy(traits)}</p><div class="trait-list">${traits.map(t=>`<span class="trait">${dimensions[t].label.toUpperCase()}</span>`).join("")}</div><p class="side-title">PASTE THIS INTO YOUR AI</p><div class="prompt-box"><pre id="prompt">${prompt}</pre><button class="button small copy" id="copy">Copy prompt</button></div></div><aside class="result-side"><p class="side-title">A JOKE YOU SHOULD LIKE</p><p class="personal-joke">“${best.text}”</p><p class="side-title">DID WE NAIL IT?</p><div class="stars" role="group" aria-label="Rate this result">${[1,2,3,4,5].map(n=>`<button class="star" data-rating="${n}" aria-label="${n} star${n>1?'s':''}">★</button>`).join("")}</div><p class="rating-status" aria-live="polite"></p><div class="actions"><button class="button small" id="refine">Refine further</button><button class="button small secondary" id="share">Share result</button><button class="button small secondary" id="restart">Start over</button></div><p class="share-status" aria-live="polite"></p></aside></div></section>`;
+  const unseen=jokes.filter(j=>!state.seen.includes(j.id));
+  const best=[...(unseen.length?unseen:jokes)].sort((a,b)=>traits.reduce((n,t)=>n+(a.tags[t]||0),0)-traits.reduce((n,t)=>n+(b.tags[t]||0),0)).pop();
+  const canRefine=unseen.length>=6;
+  app.innerHTML=`<section class="result"><div class="result-grid"><div class="result-main"><p class="eyebrow">Your comedy diagnosis</p><h1>${dimensions[traits[0]].label}<br>with a twist.</h1><p class="description">${resultCopy(traits)}</p><div class="trait-list">${traits.map(t=>`<span class="trait">${dimensions[t].label.toUpperCase()}</span>`).join("")}</div><p class="side-title">PASTE THIS INTO YOUR AI</p><div class="prompt-box"><pre id="prompt">${prompt}</pre><button class="button small copy" id="copy">Copy prompt</button></div></div><aside class="result-side"><p class="side-title">A JOKE YOU SHOULD LIKE</p><p class="personal-joke">“${best.text}”</p><p class="side-title">DID WE NAIL IT?</p><div class="stars" role="group" aria-label="Rate this result">${[1,2,3,4,5].map(n=>`<button class="star" data-rating="${n}" aria-label="${n} star${n>1?'s':''}">★</button>`).join("")}</div><p class="rating-status" aria-live="polite"></p><div class="actions">${canRefine?'<button class="button small" id="refine">Refine further</button>':''}<button class="button small secondary" id="share">Share result</button><button class="button small secondary" id="restart">Start over</button></div><p class="share-status" aria-live="polite"></p></aside></div></section>`;
   document.querySelector("#copy").onclick=async()=>{ await copyText(prompt); document.querySelector("#copy").textContent="Copied!"; };
   document.querySelector("#share").onclick=share;
   document.querySelector("#restart").onclick=()=>start(false);
-  document.querySelector("#refine").onclick=()=>start(true);
+  if(canRefine) document.querySelector("#refine").onclick=()=>start(true);
   document.querySelectorAll(".star").forEach(s=>s.onclick=()=>rate(Number(s.dataset.rating),best.id));
 }
 
