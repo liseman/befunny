@@ -1,4 +1,4 @@
-import { jokes, dimensions, selectPair, selectResultJoke, applyChoice, topTraits, encodeProfile, decodeProfile } from "./humor.js";
+import { jokes, dimensions, selectPair, selectResultJoke, applyChoice, topTraits, encodeTaste, decodeTaste } from "./humor.js";
 
 const app=document.querySelector("#app");
 const storedRatings=JSON.parse(localStorage.getItem("beFunnyRatings") || "{}");
@@ -41,7 +41,7 @@ function choose(id){
   state.feedback.push({liked:winner.text,disliked:loser.text});
   recordCrowdSignal({kind:"choice",liked:winner.text,disliked:loser.text,traits:topTraits(state.profile)});
   state.profile=applyChoice(state.profile,winner,loser); state.seen.push(...state.pair.map(j=>j.id)); state.round++;
-  if(state.round>=3){ state.screen="result"; const encoded=encodeProfile(state.profile); history.replaceState({},"",`${location.pathname}?taste=${encoded}`); }
+  if(state.round>=3){ state.screen="result"; updateShareUrl(); }
   else { preparePair(); return; }
   render();
 }
@@ -79,26 +79,40 @@ function makePrompt(traits){
   return `Be funny in a way that feels ${traits.map(t=>dimensions[t].label).join(", ")}. Favor ${dimensions[traits[0]].description} and ${dimensions[traits[1]].description}. Keep jokes concise and specific. Trust the reader to get it; never explain the punchline. Avoid generic puns, canned setup-punchline rhythms, cruelty, and trying too hard. Aim for one surprising turn, delivered with confidence.`;
 }
 
+function updateShareUrl(){
+  const encoded=encodeTaste({profile:state.profile,feedback:state.feedback,refinement:state.refinement});
+  history.replaceState({},"",`${location.pathname}?taste=${encoded}`);
+}
+
 function renderResult(){
+  const request=++pairRequest;
   const traits=topTraits(state.profile), prompt=makePrompt(traits);
   const previousJoke=localStorage.getItem("beFunnyLastResultJoke") || "";
   const best=selectResultJoke(state.profile,state.seen,previousJoke,storedRatings);
-  localStorage.setItem("beFunnyLastResultJoke",best.id);
   const canRefine=true;
-  app.innerHTML=`<section class="result"><div class="result-grid"><div class="result-main"><p class="eyebrow">Your comedy diagnosis</p><h1>${dimensions[traits[0]].label}<br>with a twist.</h1><p class="description">${resultCopy(traits)}</p><div class="trait-list">${traits.map(t=>`<span class="trait">${dimensions[t].label.toUpperCase()}</span>`).join("")}</div><p class="side-title">PASTE THIS INTO YOUR AI</p><div class="prompt-box"><pre id="prompt">${prompt}</pre><button class="button small copy" id="copy">Copy prompt</button></div></div><aside class="result-side"><p class="side-title" id="joke-label">GENERATING A FRESH JOKE…</p><p class="personal-joke" aria-live="polite">“${best.text}”</p><p class="side-title">DID WE NAIL IT?</p><div class="stars" role="group" aria-label="Rate this result">${[1,2,3,4,5].map(n=>`<button class="star" data-rating="${n}" aria-label="${n} star${n>1?'s':''}">★</button>`).join("")}</div><p class="rating-status" aria-live="polite"></p><div class="actions">${canRefine?'<button class="button small" id="refine">Refine further</button>':''}<button class="button small secondary" id="share">Share result</button><button class="button small secondary" id="restart">Start over</button></div><p class="share-status" aria-live="polite"></p></aside></div></section>`;
+  app.innerHTML=`<section class="result"><div class="result-grid"><div class="result-main"><p class="eyebrow">Your comedy diagnosis</p><h1>${dimensions[traits[0]].label}<br>with a twist.</h1><p class="description">${resultCopy(traits)}</p><div class="trait-list">${traits.map(t=>`<span class="trait">${dimensions[t].label.toUpperCase()}</span>`).join("")}</div><p class="side-title">PASTE THIS INTO YOUR AI</p><div class="prompt-box"><pre id="prompt">${prompt}</pre><button class="button small copy" id="copy">Copy prompt</button></div></div><aside class="result-side"><p class="side-title" id="joke-label">GENERATING A FRESH JOKE…</p><p class="personal-joke" aria-live="polite">Writing it now…</p><p class="side-title">DID WE NAIL IT?</p><div class="stars" role="group" aria-label="Rate this result">${[1,2,3,4,5].map(n=>`<button class="star" data-rating="${n}" aria-label="${n} star${n>1?'s':''}" disabled>★</button>`).join("")}</div><p class="rating-status" aria-live="polite"></p><div class="actions">${canRefine?'<button class="button small" id="refine">Refine further</button>':''}<button class="button small secondary" id="share">Share refined model</button><button class="button small secondary" id="restart">Start over</button></div><p class="share-status" aria-live="polite">This link includes your taste and recent choices, so a friend can continue refining it.</p></aside></div></section>`;
   document.querySelector("#copy").onclick=async()=>{ await copyText(prompt); document.querySelector("#copy").textContent="Copied!"; };
   document.querySelector("#share").onclick=share;
   document.querySelector("#restart").onclick=()=>start(false);
   if(canRefine) document.querySelector("#refine").onclick=()=>start(true);
-  let displayedJokeId=best.id;
-  let displayedJokeText=best.text;
+  let displayedJokeId="";
+  let displayedJokeText="";
   document.querySelectorAll(".star").forEach(s=>s.onclick=()=>rate(Number(s.dataset.rating),displayedJokeId,displayedJokeText));
   loadFreshJoke(traits,state.feedback).then(joke=>{
+    if(request!==pairRequest||state.screen!=="result") return;
     document.querySelector(".personal-joke").textContent=`“${joke}”`;
     document.querySelector("#joke-label").textContent="A FRESH JOKE, MADE FOR YOU";
     displayedJokeId=`generated:${joke.slice(0,80)}`;
     displayedJokeText=joke;
-  }).catch(()=>{ document.querySelector("#joke-label").textContent="A JOKE YOU SHOULD LIKE"; });
+    document.querySelectorAll(".star").forEach(star=>star.disabled=false);
+  }).catch(()=>{
+    if(request!==pairRequest||state.screen!=="result") return;
+    document.querySelector(".personal-joke").textContent=`“${best.text}”`;
+    document.querySelector("#joke-label").textContent="A JOKE YOU SHOULD LIKE";
+    displayedJokeId=best.id; displayedJokeText=best.text;
+    localStorage.setItem("beFunnyLastResultJoke",best.id);
+    document.querySelectorAll(".star").forEach(star=>star.disabled=false);
+  });
 }
 
 async function loadFreshJoke(traits,feedback=[]){
@@ -113,11 +127,11 @@ async function loadFreshJoke(traits,feedback=[]){
 }
 
 async function copyText(text){ try { await navigator.clipboard.writeText(text); } catch { const t=document.createElement("textarea");t.value=text;document.body.append(t);t.select();document.execCommand("copy");t.remove(); } }
-async function share(){ const url=location.href, status=document.querySelector(".share-status"); if(navigator.share){try{await navigator.share({title:"My Be Funny result",text:"I diagnosed my sense of humor.",url});status.textContent="Shared. Comedy is now contagious.";return}catch{}} await copyText(url);status.textContent="Result link copied!"; }
+async function share(){ updateShareUrl(); const url=location.href, status=document.querySelector(".share-status"); if(navigator.share){try{await navigator.share({title:"Refine my Be Funny model",text:"Here’s my sense of humor. Keep refining it from where I left off.",url});status.textContent="Shared. They can continue your refinement.";return}catch{}} await copyText(url);status.textContent="Refined-model link copied!"; }
 function recordCrowdSignal(signal){ fetch(jokeApi,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({mode:"feedback",...signal}),keepalive:true}).catch(()=>{}); }
 function rate(value,jokeId,jokeText){ document.querySelectorAll(".star").forEach((s,i)=>s.classList.toggle("active",i<value)); storedRatings[jokeId]=(storedRatings[jokeId]||0)+(value-3)*.3; localStorage.setItem("beFunnyRatings",JSON.stringify(storedRatings)); recordCrowdSignal({kind:"rating",joke:jokeText,rating:value,traits:topTraits(state.profile)}); document.querySelector(".rating-status").textContent=value>3?"Excellent. Your rating will improve jokes for everyone.":"Noted. Your rating will help the model avoid more like it."; }
 
 document.querySelector("#about-button").onclick=()=>document.querySelector("#about-dialog").showModal();
 document.querySelector(".dialog-close").onclick=()=>document.querySelector("#about-dialog").close();
-const shared=new URLSearchParams(location.search).get("taste"); if(shared){const profile=decodeProfile(shared);if(profile)state={...state,screen:"result",profile};}
+const shared=new URLSearchParams(location.search).get("taste"); if(shared){const taste=decodeTaste(shared);if(taste)state={...state,screen:"result",...taste};}
 render();
