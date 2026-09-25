@@ -76,3 +76,18 @@ export function topTraits(profile) { return Object.keys(dimensions).sort((a,b)=>
 
 export function encodeProfile(profile) { return btoa(JSON.stringify(profile)).replaceAll("+","-").replaceAll("/","_").replaceAll("=",""); }
 export function decodeProfile(value) { try { return JSON.parse(atob(value.replaceAll("-","+").replaceAll("_","/"))); } catch { return null; } }
+
+export function encodeTaste({profile={},feedback=[],refinement=0}) {
+  const compact={v:2,profile,refinement,feedback:feedback.slice(-6).map(({liked,disliked})=>({liked:String(liked).slice(0,180),disliked:String(disliked).slice(0,180)}))};
+  const bytes=new TextEncoder().encode(JSON.stringify(compact));
+  return btoa(String.fromCharCode(...bytes)).replaceAll("+","-").replaceAll("/","_").replaceAll("=","");
+}
+
+export function decodeTaste(value) {
+  try {
+    const binary=atob(value.replaceAll("-","+").replaceAll("_","/"));
+    const decoded=JSON.parse(new TextDecoder().decode(Uint8Array.from(binary,char=>char.charCodeAt(0))));
+    if(decoded?.v===2&&decoded.profile) return {profile:decoded.profile,feedback:Array.isArray(decoded.feedback)?decoded.feedback:[],refinement:Number(decoded.refinement)||0};
+    return {profile:decoded,feedback:[],refinement:0};
+  } catch { return null; }
+}
