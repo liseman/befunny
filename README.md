@@ -8,7 +8,7 @@ Be Funny is a tiny, privacy-friendly humor taste test. Pick the funnier joke in 
 - a shareable result URL; and
 - a five-star feedback control that improves future recommendations on the device.
 
-The app is a dependency-free static site. Its adaptive ranking combines each answer with seeded crowd preferences and feedback saved in `localStorage`. A Cloudflare Worker uses Workers AI to write every displayed pair on demand and generate the final personalized joke; recent material stays in the browser to discourage repeats.
+The app is a dependency-free static site. Its adaptive ranking combines each answer with seeded crowd preferences and feedback saved in `localStorage`. A Cloudflare Worker uses Workers AI to write every displayed pair on demand and generate the final personalized joke; recent material stays in the browser to discourage repeats. Anonymous joke choices and star ratings are also aggregated in Cloudflare KV so what works—or fails—for one visitor improves future generations for everyone; no account or personal identifier is stored.
 
 ## Test
 

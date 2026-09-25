@@ -6,3 +6,7 @@ workers_dev = true
 
 [ai]
 binding = "AI"
+
+[[kv_namespaces]]
+binding = "HUMOR_STATS"
+id = "f2c2b8916bd748f198562590ad524258"

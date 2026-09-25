@@ -39,6 +39,7 @@ function renderQuiz(){
 function choose(id){
   const winner=state.pair.find(j=>j.id===id), loser=state.pair.find(j=>j.id!==id);
   state.feedback.push({liked:winner.text,disliked:loser.text});
+  recordCrowdSignal({kind:"choice",liked:winner.text,disliked:loser.text,traits:topTraits(state.profile)});
   state.profile=applyChoice(state.profile,winner,loser); state.seen.push(...state.pair.map(j=>j.id)); state.round++;
   if(state.round>=3){ state.screen="result"; const encoded=encodeProfile(state.profile); history.replaceState({},"",`${location.pathname}?taste=${encoded}`); }
   else { preparePair(); return; }
@@ -90,11 +91,13 @@ function renderResult(){
   document.querySelector("#restart").onclick=()=>start(false);
   if(canRefine) document.querySelector("#refine").onclick=()=>start(true);
   let displayedJokeId=best.id;
-  document.querySelectorAll(".star").forEach(s=>s.onclick=()=>rate(Number(s.dataset.rating),displayedJokeId));
+  let displayedJokeText=best.text;
+  document.querySelectorAll(".star").forEach(s=>s.onclick=()=>rate(Number(s.dataset.rating),displayedJokeId,displayedJokeText));
   loadFreshJoke(traits,state.feedback).then(joke=>{
     document.querySelector(".personal-joke").textContent=`“${joke}”`;
     document.querySelector("#joke-label").textContent="A FRESH JOKE, MADE FOR YOU";
     displayedJokeId=`generated:${joke.slice(0,80)}`;
+    displayedJokeText=joke;
   }).catch(()=>{ document.querySelector("#joke-label").textContent="A JOKE YOU SHOULD LIKE"; });
 }
 
@@ -111,7 +114,8 @@ async function loadFreshJoke(traits,feedback=[]){
 
 async function copyText(text){ try { await navigator.clipboard.writeText(text); } catch { const t=document.createElement("textarea");t.value=text;document.body.append(t);t.select();document.execCommand("copy");t.remove(); } }
 async function share(){ const url=location.href, status=document.querySelector(".share-status"); if(navigator.share){try{await navigator.share({title:"My Be Funny result",text:"I diagnosed my sense of humor.",url});status.textContent="Shared. Comedy is now contagious.";return}catch{}} await copyText(url);status.textContent="Result link copied!"; }
-function rate(value,jokeId){ document.querySelectorAll(".star").forEach((s,i)=>s.classList.toggle("active",i<value)); storedRatings[jokeId]=(storedRatings[jokeId]||0)+(value-3)*.3; localStorage.setItem("beFunnyRatings",JSON.stringify(storedRatings)); document.querySelector(".rating-status").textContent=value>3?"Excellent. Our tiny algorithm is blushing.":"Noted. The algorithm has entered therapy."; }
+function recordCrowdSignal(signal){ fetch(jokeApi,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({mode:"feedback",...signal}),keepalive:true}).catch(()=>{}); }
+function rate(value,jokeId,jokeText){ document.querySelectorAll(".star").forEach((s,i)=>s.classList.toggle("active",i<value)); storedRatings[jokeId]=(storedRatings[jokeId]||0)+(value-3)*.3; localStorage.setItem("beFunnyRatings",JSON.stringify(storedRatings)); recordCrowdSignal({kind:"rating",joke:jokeText,rating:value,traits:topTraits(state.profile)}); document.querySelector(".rating-status").textContent=value>3?"Excellent. Your rating will improve jokes for everyone.":"Noted. Your rating will help the model avoid more like it."; }
 
 document.querySelector("#about-button").onclick=()=>document.querySelector("#about-dialog").showModal();
 document.querySelector(".dialog-close").onclick=()=>document.querySelector("#about-dialog").close();
